@@ -50,8 +50,8 @@ def movie_from_json(doc: dict) -> Movie:
         id=try_parse_int(doc["id"]),
         name=doc["name"],
         alternative_name=doc["alternativeName"],
-        genres=', '.join([genre['name'] for genre in doc.get('genres', [])]),
-        countries=', '.join([country['name'] for country in doc.get('countries', [])]),
+        genres=','.join([genre['name'] for genre in doc.get('genres', [])]),
+        countries=','.join([country['name'] for country in doc.get('countries', [])]),
         fees_ru=parse_fees(doc["fees"], "russia") if "fees" in doc.keys() else None,
         fees_world=parse_fees(doc["fees"], "world") if "fees" in doc.keys() else None,
         rating_kp=try_parse_float(doc["rating"]["kp"]),
@@ -64,7 +64,7 @@ def movie_from_json(doc: dict) -> Movie:
         duration=try_parse_int(field_or_none(doc, "movieLength")),
         ratingMpaa=field_or_none(doc, "ratingMpaa"),
         ratingAge=try_parse_int(field_or_none(doc, "ageRating")),
-        networks=""
+        networks=','.join([network['name'] for network in doc.get('networks', dict()).get('items', [])]),
     )
 
 
