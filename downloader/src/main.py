@@ -36,12 +36,8 @@ def parse_fees(value: dict, key: str):
             return currency_to_dollar(value[key]["value"], value[key]["currency"])
 
 
-def field_or_none(value, field):
-    return value[field] if field in value.keys() else None
-
-
 def parse_premiere(doc, place):
-    premiere = field_or_none(doc, "premiere")
+    premiere = doc.get('premiere', None)
     return premiere[place] if premiere else None
 
 
@@ -61,9 +57,9 @@ def movie_from_json(doc: dict) -> Movie:
         year=try_parse_int(doc["year"]),
         premiere_ru=parse_premiere(doc, "russia"),
         premiere_world=parse_premiere(doc, "world"),
-        duration=try_parse_int(field_or_none(doc, "movieLength")),
-        ratingMpaa=field_or_none(doc, "ratingMpaa"),
-        ratingAge=try_parse_int(field_or_none(doc, "ageRating")),
+        duration=try_parse_int(doc.get('movieLength', None)),
+        ratingMpaa=doc.get('ratingMpaa', None),
+        ratingAge=try_parse_int(doc.get('ageRating', None)),
         networks=','.join([network['name'] for network in doc.get('networks', dict()).get('items', [])]),
     )
 
@@ -72,10 +68,10 @@ def person_from_json(doc: dict, movie_id: int) -> Person:
     return Person(
         id=doc["id"],
         movie_id=movie_id,
-        name=field_or_none(doc,"name"),
-        en_name=field_or_none(doc, "enName"),
-        profession=field_or_none(doc, "profession"),
-        en_profession=field_or_none(doc, "enProfession")
+        name=doc.get('name', None),
+        en_name=doc.get('enName', None),
+        profession=doc.get('profession', None),
+        en_profession=doc.get('enProfession', None)
     )
 
 
@@ -109,13 +105,18 @@ async def download_movies(page: int):
             parse_persons(d, movie.id)
 
 
-create_tables()
+def main():
+    create_tables()
 
-ioloop = asyncio.get_event_loop()
-tasks = []
+    ioloop = asyncio.get_event_loop()
+    tasks = []
 
-for i in range(58, 60):
-    tasks.append(ioloop.create_task(download_movies(i)))
+    for i in range(58, 60):
+        tasks.append(ioloop.create_task(download_movies(i)))
 
-ioloop.run_until_complete(asyncio.wait(tasks))
-ioloop.close()
+    ioloop.run_until_complete(asyncio.wait(tasks))
+    ioloop.close()
+
+
+if __name__ == "__main__":
+    main()
