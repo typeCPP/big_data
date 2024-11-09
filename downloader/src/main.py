@@ -3,7 +3,7 @@ import sys
 import requests
 import json
 
-from models import Movie, create_tables, add_movie_to_db
+from models import Movie, create_tables, add_movie_to_db, Person, add_person_to_db
 
 
 def try_parse_int(value):
@@ -11,6 +11,7 @@ def try_parse_int(value):
         return int(value)
     except:
         return None
+
 
 def try_parse_float(value):
     try:
@@ -67,11 +68,37 @@ def movie_from_json(doc: dict) -> Movie:
     )
 
 
+def person_from_json(doc: dict, movie_id: int) -> Person:
+    return Person(
+        id=doc["id"],
+        movie_id=movie_id,
+        name=field_or_none(doc,"name"),
+        en_name=field_or_none(doc, "enName"),
+        profession=field_or_none(doc, "profession"),
+        en_profession=field_or_none(doc, "enProfession")
+    )
+
+
+def parse_persons(movie_json: dict, movie_id):
+    if "persons" in movie_json.keys():
+        for p in movie_json["persons"]:
+            person = person_from_json(p, movie_id)
+            add_person_to_db(person)
+
+
+def load_select_fields():
+    with open('select_fields.json') as json_data:
+        data = json.load(json_data)
+        print(data['fields'])
+        return data['fields']
+
+
 async def download_movies(page: int):
     print(f"Downloading page {page}")
 
     headers = {'X-API-KEY': sys.argv[1], 'accept': 'application/json'}
-    params = {'page': page, 'limit': 250}
+    params = {'page': page, 'limit': 250, 'selectFields': load_select_fields()}
+
     response = requests.get('https://api.kinopoisk.dev/v1.4/movie', params=params, headers=headers)
 
     doc = json.loads(response.content.decode('utf-8'))
@@ -79,6 +106,7 @@ async def download_movies(page: int):
         movie = movie_from_json(d)
         if movie:
             add_movie_to_db(movie)
+            parse_persons(d, movie.id)
 
 
 create_tables()

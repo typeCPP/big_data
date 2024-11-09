@@ -1,0 +1,21 @@
+{
+  "fields": [
+    "id",
+    "externalId",
+    "name",
+    "enName",
+    "alternativeName",
+    "year",
+    "rating",
+    "ratingMpaa",
+    "ageRating",
+    "budget",
+    "movieLength",
+    "genres",
+    "countries",
+    "networks",
+    "persons",
+    "fees",
+    "premiere"
+  ]
+}

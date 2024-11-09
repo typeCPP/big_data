@@ -1,11 +1,9 @@
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import mapped_column
-from sqlalchemy import Text, BigInteger, Integer, Double, DateTime
+from sqlalchemy import Text, BigInteger, Integer, Double, DateTime, ForeignKey
 from sqlalchemy import create_engine
-
-
 
 DB_URL = 'postgresql://localhost:5432/big_data'
 engine = create_engine(DB_URL, echo=True)
@@ -50,10 +48,38 @@ class Movie(Base):
     networks: Mapped[int] = mapped_column(Text, nullable=True)
 
 
+class Person(Base):
+    __tablename__ = "persons"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    movie_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("movies.id"),
+    )
+
+    name: Mapped[str] = mapped_column(Text, nullable=True)
+    en_name: Mapped[str] = mapped_column(Text, nullable=True)
+
+    profession: Mapped[str] = mapped_column(Text, nullable=True)
+    en_profession: Mapped[str] = mapped_column(Text, nullable=True)
+
+
 def create_tables() -> None:
     Base.metadata.create_all(engine)
 
 
 def add_movie_to_db(movie: Movie):
-    session.add(movie)
-    session.commit()
+    try:
+        session.add(movie)
+        session.commit()
+    except:
+        session.rollback()
+
+
+def add_person_to_db(person: Person):
+    try:
+        session.add(person)
+        session.commit()
+    except:
+        session.rollback()
