@@ -6,7 +6,7 @@ from sqlalchemy import Text, BigInteger, Integer, Double, DateTime, ForeignKey
 from sqlalchemy import create_engine
 
 DB_URL = 'postgresql://localhost:5432/big_data'
-engine = create_engine(DB_URL, echo=True)
+engine = create_engine(DB_URL, echo=False)
 session = sessionmaker(engine)()
 
 

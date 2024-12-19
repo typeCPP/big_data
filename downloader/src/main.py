@@ -1,9 +1,9 @@
-import asyncio
 import sys
 import requests
 import json
 
 from models import Movie, create_tables, add_movie_to_db, Person, add_person_to_db
+from multiprocessing import Pool
 
 
 def try_parse_int(value):
@@ -42,26 +42,38 @@ def parse_premiere(doc, place):
 
 
 def movie_from_json(doc: dict) -> Movie:
-    return Movie(
-        id=try_parse_int(doc["id"]),
-        name=doc["name"],
-        alternative_name=doc["alternativeName"],
-        genres=','.join([genre['name'] for genre in doc.get('genres', [])]),
-        countries=','.join([country['name'] for country in doc.get('countries', [])]),
-        fees_ru=parse_fees(doc["fees"], "russia") if "fees" in doc.keys() else None,
-        fees_world=parse_fees(doc["fees"], "world") if "fees" in doc.keys() else None,
-        rating_kp=try_parse_float(doc["rating"]["kp"]),
-        rating_imdb=try_parse_float(doc["rating"]["imdb"]),
-        critics_ru=try_parse_float(doc["rating"]["russianFilmCritics"]),
-        critics_world=try_parse_float(doc["rating"]["filmCritics"]),
-        year=try_parse_int(doc["year"]),
-        premiere_ru=parse_premiere(doc, "russia"),
-        premiere_world=parse_premiere(doc, "world"),
-        duration=try_parse_int(doc.get('movieLength', None)),
-        ratingMpaa=doc.get('ratingMpaa', None),
-        ratingAge=try_parse_int(doc.get('ageRating', None)),
-        networks=','.join([network['name'] for network in doc.get('networks', dict()).get('items', [])]),
-    )
+    try:
+        if not doc:
+            return None
+
+        networks = ''
+        if 'networks' in doc.keys():
+            if doc['networks'] and 'items' in doc['networks']:
+                networks = ','.join([network['name'] for network in doc.get('networks', {}).get('items', [])])
+
+        return Movie(
+            id=try_parse_int(doc["id"]),
+            name=doc["name"],
+            alternative_name=doc["alternativeName"],
+            genres=','.join([genre['name'] for genre in doc.get('genres', [])]) if 'genres' in doc.keys() else None,
+            countries=','.join([country['name'] for country in doc.get('countries', [])]),
+            fees_ru=parse_fees(doc["fees"], "russia") if "fees" in doc.keys() else None,
+            fees_world=parse_fees(doc["fees"], "world") if "fees" in doc.keys() else None,
+            rating_kp=try_parse_float(doc["rating"]["kp"]),
+            rating_imdb=try_parse_float(doc["rating"]["imdb"]),
+            critics_ru=try_parse_float(doc["rating"]["russianFilmCritics"]),
+            critics_world=try_parse_float(doc["rating"]["filmCritics"]),
+            year=try_parse_int(doc["year"]),
+            premiere_ru=parse_premiere(doc, "russia"),
+            premiere_world=parse_premiere(doc, "world"),
+            duration=try_parse_int(doc.get('movieLength', None)),
+            ratingMpaa=doc.get('ratingMpaa', None),
+            ratingAge=try_parse_int(doc.get('ageRating', None)),
+            networks=networks,
+        )
+    except Exception as e:
+        raise Exception
+        return None
 
 
 def person_from_json(doc: dict, movie_id: int) -> Person:
@@ -85,37 +97,61 @@ def parse_persons(movie_json: dict, movie_id):
 def load_select_fields():
     with open('select_fields.json') as json_data:
         data = json.load(json_data)
-        print(data['fields'])
         return data['fields']
 
 
-async def download_movies(page: int):
+SELECT_FIELDS = load_select_fields()
+FAILED_PAGES = []
+
+
+def download_movies(page: int):
+    global SELECT_FIELDS
     print(f"Downloading page {page}")
 
     headers = {'X-API-KEY': sys.argv[1], 'accept': 'application/json'}
-    params = {'page': page, 'limit': 250, 'selectFields': load_select_fields()}
+    params = {'page': page, 'limit': 250, 'selectFields': SELECT_FIELDS}
 
     response = requests.get('https://api.kinopoisk.dev/v1.4/movie', params=params, headers=headers)
+    if response.status_code != 200:
+        print('Request for page', page, 'failed', ' Reason: ', response.reason)
+        return False, page
 
+    # try:
     doc = json.loads(response.content.decode('utf-8'))
     for d in doc["docs"]:
         movie = movie_from_json(d)
         if movie:
             add_movie_to_db(movie)
             parse_persons(d, movie.id)
+    # except Exception as e:
+    #     print('Failed parsing page:', page, 'Error:', e)
+    #     return False
+
+    return True, page
+
+
+def parse_page_callback(result):
+    is_ok, page = result
+    if not is_ok:
+        FAILED_PAGES.append(page)
 
 
 def main():
     create_tables()
 
-    ioloop = asyncio.get_event_loop()
-    tasks = []
+    pool = Pool(processes=100)
+    for i in range(2820, 2930):
+        pool.apply_async(download_movies, args=(i, ), callback=parse_page_callback)
+    pool.close()
+    pool.join()
 
-    for i in range(58, 60):
-        tasks.append(ioloop.create_task(download_movies(i)))
-
-    ioloop.run_until_complete(asyncio.wait(tasks))
-    ioloop.close()
+    while len(FAILED_PAGES) > 0:
+        print('FAILED_PAGES', sorted(FAILED_PAGES))
+        pool2 = Pool(processes=100)
+        for i in FAILED_PAGES:
+            pool2.apply_async(download_movies, args=(i,), callback=parse_page_callback)
+        pool2.close()
+        pool2.join()
 
 
 if __name__ == "__main__":
